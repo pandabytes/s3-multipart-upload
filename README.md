@@ -38,13 +38,32 @@ options:
 
 Example run
 ```bash
+# First run gets interrupted when part number 3 is being uploaded
 $ python s3_multipart_upload/main.py upload \
-  -b my-bucket \
-  -k data/input.txt \
-  -d /Users/foo/data/ \
-  -p input_data_ \
-  -c ./upload_config.json \
-  -n 5 # Optional
+  -b "my-bucket" \
+  -k "data/input.txt" \
+  -d "/Users/foo/data/" \
+  -p "input_data_" \
+  -c "./upload_config.json"
+[2023-05-16 16:36:16,993 - upload_logger INFO] Initiating multipart upload in ./upload_config.json (upload.py:56)
+[2023-05-16 16:36:17,567 - upload_logger INFO] Uploading 1 - data/input_data_000 - WoJl8ZYhQfgZAbdKYDwEFA== (upload.py:83)
+[2023-05-16 16:36:38,089 - upload_logger INFO] Uploading 2 - data/input_data_001 - yrFuoEEu+fllFwckqiF81A== (upload.py:83)
+[2023-05-16 16:36:53,138 - upload_logger INFO] Uploading 3 - data/input_data_002 - VOHsvnwf6GNLKTPNp1NMmw== (upload.py:83)
+ERROR: Credential AWS refreshed, please log back in.
+
+# After refreshing AWS credential, the app knows to pick up 
+# where it left off which is part number 3
+$ python s3_multipart_upload/main.py upload \
+  -b "my-bucket" \
+  -k "data/input.txt" \
+  -d "/Users/foo/data/" \
+  -p "input_data_" \
+  -c "./upload_config.json"
+[2023-05-16 16:37:30,762 - upload_logger INFO] Continuing multipart upload from ./upload_config.json (upload.py:61)
+[2023-05-16 16:37:31,448 - upload_logger WARNING] Skipped 2/4 files (upload.py:76)
+[2023-05-16 16:37:31,621 - upload_logger INFO] Uploading 3 - data/input_data_002 - VOHsvnwf6GNLKTPNp1NMmw== (upload.py:83)
+[2023-05-16 16:37:31,621 - upload_logger INFO] Uploading 4 - data/input_data_003 - VOHsvnwf6GNLKTPNp2NMmw== (upload.py:83)
+[2023-05-16 16:43:23,766 - upload_logger INFO] Uploaded 2 part(s). Will now complete multipart upload (upload.py:100)
 ```
 
 # How it works?
