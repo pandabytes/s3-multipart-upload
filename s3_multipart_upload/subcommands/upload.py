@@ -26,11 +26,10 @@ class MultipartConfig:
   Parts: list[UploadedPart]
 
   def __post_init__(self):
-    if isinstance(self.Parts, list) and \
-       self.Parts \
-       and isinstance(self.Parts[0], dict):
-      parts = [UploadedPart(**part) for part in self.Parts]
-      super().__setattr__('Parts', parts)
+    if (isinstance(self.Parts, list) and
+        self.Parts and
+        isinstance(self.Parts[0], dict)):
+      self.Parts = [UploadedPart(**part) for part in self.Parts]
 
   def to_dict(self) -> dict:
     return asdict(self)
