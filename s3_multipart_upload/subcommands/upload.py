@@ -21,7 +21,9 @@ class UploadedPart:
   PartNumber: int
 
 @dataclass
-class MultipartConfig:
+class MultipartUploadConfig:
+  Bucket: str
+  Key: str
   UploadId: str
   Parts: list[UploadedPart]
 
@@ -53,7 +55,7 @@ def upload_multipart(
   if config is None:
     logger.info(f'Initiating multipart upload in {config_path}')
     upload_id = _initiate_multipart_upload(s3_client, bucket, key)
-    config = MultipartConfig(upload_id, [])
+    config = MultipartUploadConfig(bucket, key, upload_id, [])
     _save_multipart_file(config_path, config)
   else:
     logger.info(f'Continuing multipart upload from {config_path}')
@@ -95,7 +97,7 @@ def upload_multipart(
 
   # Finally complete the multipart upload
   if len(filtered_upload_files) > 0:
-    logger.info(f'Uploaded {len(filtered_upload_files)} parts. Will now complete multipart upload')
+    logger.info(f'Uploaded {len(filtered_upload_files)} part(s). Will now complete multipart upload')
     _complete_multipart_upload(s3_client, bucket, key, config, upload_id)
 
 def _get_md5(file_path: str) -> str:
@@ -117,7 +119,7 @@ def _initiate_multipart_upload(s3_client: S3Client, bucket: str, key: str) -> st
   response = s3_client.create_multipart_upload(Bucket=bucket, Key=key)
   return response['UploadId']
 
-def _complete_multipart_upload(s3_client: S3Client, bucket: str, key: str, config: MultipartConfig, upload_id: str):
+def _complete_multipart_upload(s3_client: S3Client, bucket: str, key: str, config: MultipartUploadConfig, upload_id: str):
   config_dict = config.to_dict()
   parts_dict = {'Parts': config_dict['Parts']}
 
@@ -135,9 +137,9 @@ def _load_multipart_file(file_path: str):
 
   with open(file_path, 'r') as multipart_file:
     json_obj = json.load(multipart_file)
-    return MultipartConfig(**json_obj)
+    return MultipartUploadConfig(**json_obj)
 
-def _save_multipart_file(file_path: str, config: MultipartConfig):
+def _save_multipart_file(file_path: str, config: MultipartUploadConfig):
   with open(file_path, 'w') as multipart_file:
     multipart_file.write(config.to_json())
 
@@ -149,7 +151,7 @@ def _get_upload_files(folder_path: str, prefix: str):
 
   return [UploadFile(file_path, index + 1) for index, file_path in enumerate(file_paths)]
 
-def _get_start_part_number(config: MultipartConfig, starting_part_number: int | None):
+def _get_start_part_number(config: MultipartUploadConfig, starting_part_number: int | None):
   if starting_part_number is None:
     return config.Parts[-1].PartNumber + 1 if config.Parts else 1
   return starting_part_number
