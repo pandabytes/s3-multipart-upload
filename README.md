@@ -8,6 +8,19 @@ was left off.
 1. Install `pyenv`
 1. Install `aws-vault` to set up your AWS credential
 
+If we want to do multipart upload manually, we must first split the file into smaller files. 
+```bash
+# -d: use number suffix
+# -a: indicate the length of the suffix (00, 000, etc...)
+# -b: split by the file size. Example below splits the file by 40 MB chunk
+# This will split large_file.csv into:
+#   /user/foo/split_file_000
+#   /user/foo/split_file_001
+#   /user/foo/split_file_002
+#   ...
+split -d -a 3 -b40M larg_file.csv /user/foo/split_file_
+```
+
 ## Set up repo
 1. Use pyenv to install the Python version documented in `.python-version`
 1. Run `pyenv virtualenv <python_version> s3-multipart-upload` to create a
