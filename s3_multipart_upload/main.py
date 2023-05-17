@@ -22,10 +22,8 @@ def build_args_parser(args: list[str]):
   upload_cmd_parser.add_argument('-n', '--start-part-number', type=int, required=False, help='Optionally specify which part number to start')
 
   # Abort sub-command
-  abort_cmd_parser = subparsers.add_parser('abort', help='Abort multipart upload')
-  abort_cmd_parser.add_argument('-b', '--bucket', type=str, required=True, help='S3 bucket')
-  abort_cmd_parser.add_argument('-k', '--key', type=str, required=True, help='S3 key in which also includes the file name')
-  abort_cmd_parser.add_argument('-u', '--upload-id', type=str, required=True, help='Upload id')
+  abort_cmd_parser = subparsers.add_parser('abort', help='Abort multipart upload defined in CONFIG_PATH')
+  abort_cmd_parser.add_argument('-c', '--config-path', type=str, required=True, help='Path to the config file')
 
   return parser.parse_args(args)
 
@@ -42,7 +40,5 @@ if __name__ == '__main__':
     starting_part_number: int | None = args.start_part_number
     upload_multipart(s3_client, bucket, key, folder_path, prefix, config_path, starting_part_number)
   elif subcommand_name == 'abort':
-    bucket: str = args.bucket
-    key: str = args.key
-    upload_id: str = args.upload_id
-    abort_multipart_upload(s3_client, bucket, key, upload_id)
+    config_path: str = args.config_path
+    abort_multipart_upload(s3_client, config_path)

@@ -1,43 +1,19 @@
 import base64
 import hashlib
-import json
 import os
-from dataclasses import asdict, dataclass
 
 from mypy_boto3_s3 import S3Client
 
 from s3_multipart_upload.logger import get_logger
+from s3_multipart_upload.subcommands.config import (
+  MultipartUploadConfig,
+  UploadedPart,
+  UploadFile,
+  load_multipart_file,
+  save_multipart_file,
+)
 
 logger = get_logger('upload_logger')
-
-@dataclass(frozen=True)
-class UploadFile:
-  FilePath: str
-  PartNumber: int
-
-@dataclass(frozen=True)
-class UploadedPart:
-  ETag: str
-  PartNumber: int
-
-@dataclass
-class MultipartUploadConfig:
-  Bucket: str
-  Key: str
-  UploadId: str
-  Parts: list[UploadedPart]
-
-  def __post_init__(self):
-    if (isinstance(self.Parts, list) and
-        self.Parts and
-        isinstance(self.Parts[0], dict)):
-      self.Parts = [UploadedPart(**part) for part in self.Parts]
-
-  def to_dict(self) -> dict:
-    return asdict(self)
-  
-  def to_json(self) -> str:
-    return json.dumps(self.to_dict(), indent=2)
 
 def upload_multipart(
   s3_client: S3Client,
@@ -50,13 +26,13 @@ def upload_multipart(
 ):
   # Determine if we need to initiate a new multipart upload 
   # or to continue with an existing multipart upload
-  config = _load_multipart_file(config_path)
+  config = load_multipart_file(config_path)
   upload_id = None
   if config is None:
     logger.info(f'Initiating multipart upload in {config_path}')
     upload_id = _initiate_multipart_upload(s3_client, bucket, key)
     config = MultipartUploadConfig(bucket, key, upload_id, [])
-    _save_multipart_file(config_path, config)
+    save_multipart_file(config_path, config)
   else:
     logger.info(f'Continuing multipart upload from {config_path}')
     upload_id = config.UploadId
@@ -93,7 +69,7 @@ def upload_multipart(
 
     e_tag = upload_response['ETag'].replace('""', '')
     config.Parts.append(UploadedPart(e_tag, part_number))
-    _save_multipart_file(config_path, config)
+    save_multipart_file(config_path, config)
 
   # Finally complete the multipart upload
   if len(filtered_upload_files) > 0:
@@ -129,19 +105,6 @@ def _complete_multipart_upload(s3_client: S3Client, bucket: str, key: str, confi
     MultipartUpload=parts_dict,
     UploadId=upload_id
   )
-
-def _load_multipart_file(file_path: str):
-  # File not found or file is empty
-  if not os.path.exists(file_path) or os.stat(file_path).st_size == 0 :
-    return None
-
-  with open(file_path, 'r') as multipart_file:
-    json_obj = json.load(multipart_file)
-    return MultipartUploadConfig(**json_obj)
-
-def _save_multipart_file(file_path: str, config: MultipartUploadConfig):
-  with open(file_path, 'w') as multipart_file:
-    multipart_file.write(config.to_json())
 
 def _get_upload_files(folder_path: str, prefix: str):
   file_paths = sorted([
