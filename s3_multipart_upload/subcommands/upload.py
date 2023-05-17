@@ -67,7 +67,7 @@ def upload_multipart(
         ContentMD5=md5,
       )
 
-    e_tag = upload_response['ETag'].replace('""', '')
+    e_tag = upload_response['ETag'].replace('"', '')
     config.Parts.append(UploadedPart(e_tag, part_number))
     save_multipart_file(config_path, config)
 
