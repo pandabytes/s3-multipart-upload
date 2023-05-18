@@ -47,20 +47,21 @@ def upload_multipart(
   upload_files = _get_upload_files(folder_path, prefix)
   filtered_upload_files = _filter_file_paths(upload_files, start_part_number)
 
-  if len(upload_files) == 0:
+  upload_files_count = len(upload_files)
+  if upload_files_count == 0:
     logger.warning(f'No files found. Please make sure your folder path and prefix are correct')
     return
 
   skip_file_count = len(upload_files) - len(filtered_upload_files)
   if skip_file_count > 0:
-    logger.warning(f'Skipped {skip_file_count}/{len(upload_files)} files')
+    logger.warning(f'Skipped {skip_file_count}/{upload_files_count} files')
 
   # Upload file one by one and save its ETag (returned from AWS)
   for upload_file in filtered_upload_files:
     file_path, part_number = upload_file.FilePath, upload_file.PartNumber
     md5 = _get_md5(file_path)
 
-    logger.info(f'Uploading {part_number} - {file_path} - {md5}')
+    logger.info(f'Uploading {part_number}/{upload_files_count} - {file_path} - {md5}')
     with open(file_path, 'rb') as part_file:
       upload_response = s3_client.upload_part(
         Bucket=bucket, 
