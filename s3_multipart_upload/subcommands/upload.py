@@ -37,7 +37,7 @@ def upload_multipart(
     logger.info(f'Continuing multipart upload from {config_path}')
     upload_id = config.UploadId
     if not _is_multipart_in_progress(s3_client, bucket, upload_id):
-      logger.warning(f'Upload id in {config_path} is either completed or aborted. No upload will be done.')
+      logger.warning(f'Upload id in {config_path} is either invalid, completed, or aborted. No upload will be done.')
       return
 
   # Get the files that we want to upload and if user specifies
