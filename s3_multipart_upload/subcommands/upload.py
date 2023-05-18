@@ -47,6 +47,10 @@ def upload_multipart(
   upload_files = _get_upload_files(folder_path, prefix)
   filtered_upload_files = _filter_file_paths(upload_files, start_part_number)
 
+  if len(upload_files) == 0:
+    logger.warning(f'No files found. Please make sure your folder path and prefix are correct')
+    return
+
   skip_file_count = len(upload_files) - len(filtered_upload_files)
   if skip_file_count > 0:
     logger.warning(f'Skipped {skip_file_count}/{len(upload_files)} files')
