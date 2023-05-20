@@ -3,14 +3,13 @@ import os
 from dataclasses import asdict, dataclass
 
 @dataclass(frozen=True)
-class UploadFile:
-  FilePath: str
-  PartNumber: int
-
-@dataclass(frozen=True)
 class UploadedPart:
   ETag: str
   PartNumber: int
+
+  def __post_init__(self):
+    if self.PartNumber <= 0:
+      raise ValueError('PartNumber must be at least 1.')
 
 @dataclass
 class MultipartUploadConfig:

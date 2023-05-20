@@ -8,6 +8,12 @@ from s3_multipart_upload.subcommands.upload import upload_multipart
 
 s3_client = boto3.client('s3')
 
+def check_positive_int(numberStr: str):
+  number = int(numberStr)
+  if number <= 0:
+    raise argparse.ArgumentTypeError(f'{numberStr} must be a positive number greater than 0.')
+  return number
+
 def build_args_parser(args: list[str]):
   parser = argparse.ArgumentParser(description='Script to .')
   subparsers = parser.add_subparsers(dest='subcommand', help='Available sub-commands', required=True)
@@ -19,7 +25,7 @@ def build_args_parser(args: list[str]):
   upload_cmd_parser.add_argument('-d', '--folder-path', type=str, required=True, help='Folder path where the split files are stored')
   upload_cmd_parser.add_argument('-p', '--prefix', type=str, required=True, help='Prefix of the split files')
   upload_cmd_parser.add_argument('-c', '--config-path', type=str, required=True, help='Path to the config file')
-  upload_cmd_parser.add_argument('-n', '--start-part-number', type=int, required=False, help='Optionally specify which part number to start')
+  upload_cmd_parser.add_argument('-n', '--start-part-number', type=check_positive_int, required=False, help='Optionally specify which part number to start')
 
   # Abort sub-command
   abort_cmd_parser = subparsers.add_parser('abort', help='Abort multipart upload defined in CONFIG_PATH')

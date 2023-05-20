@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import os
+from dataclasses import dataclass
 
 from mypy_boto3_s3 import S3Client
 
@@ -8,10 +9,19 @@ from s3_multipart_upload.logger import get_logger
 from s3_multipart_upload.subcommands.config import (
   MultipartUploadConfig,
   UploadedPart,
-  UploadFile,
   load_multipart_file,
   save_multipart_file,
 )
+
+@dataclass(frozen=True)
+class UploadFile:
+  FilePath: str
+  PartNumber: int
+
+  def __post_init__(self):
+    if self.PartNumber <= 0:
+      raise ValueError('PartNumber must be at least 1.')
+
 
 logger = get_logger('upload_logger')
 
