@@ -10,7 +10,11 @@ from s3_multipart_upload.subcommands.config import (
 )
 from s3_multipart_upload.subcommands.upload.upload_file import UploadFile
 from s3_multipart_upload.subcommands.upload.upload_single_thread import upload_part
-
+from s3_multipart_upload.subcommands.upload.s3_multipart_upload import (
+  complete_multipart_upload,
+  initiate_multipart_upload,
+  is_multipart_in_progress,
+)
 
 LOGGER = get_logger(__name__)
 
@@ -25,9 +29,12 @@ def upload_multipart(
 ):
   # Determine if we need to initiate a new multipart upload 
   # or to continue with an existing multipart upload
-  config, new_multipart_upload = _get_config(s3_client, bucket, key, config_path)
-  if new_multipart_upload:
+  # config, new_multipart_upload = _get_config(s3_client, bucket, key, config_path)
+  config = load_multipart_file(config_path)
+  if config is None:
     LOGGER.info(f'Initiating multipart upload in {config_path}.')
+    upload_id = initiate_multipart_upload(s3_client, bucket, key)
+    config = MultipartUploadConfig(bucket, key, upload_id, []), True
     save_multipart_file(config_path, config)
   else:
     LOGGER.info(f'Continuing multipart upload from {config_path}.')
@@ -37,7 +44,7 @@ def upload_multipart(
       LOGGER.error(f'bucket or key does not match with Bucket or Key in {config_path}.')
       return
 
-    if not _is_multipart_in_progress(s3_client, config.Bucket, config.UploadId):
+    if not is_multipart_in_progress(s3_client, config.Bucket, config.UploadId):
       LOGGER.error(f'Upload id in {config_path} is either invalid, completed, or aborted.')
       return
 
@@ -70,41 +77,7 @@ def upload_multipart(
   # Finally complete the multipart upload
   if len(filtered_upload_files) > 0:
     LOGGER.info(f'Uploaded {len(filtered_upload_files)} part(s). Will now complete multipart upload.')
-    _complete_multipart_upload(s3_client, config)
-
-def _get_config(s3_client: S3Client, bucket: str, key: str, config_path: str) -> tuple[MultipartUploadConfig, bool]:
-  """ Get the multipart config and a boolean value to indicate
-      whether we loaded an existing config or we created a new one.
-  """
-  config = load_multipart_file(config_path)
-  if config is None:
-    upload_id = _initiate_multipart_upload(s3_client, bucket, key)
-    return MultipartUploadConfig(bucket, key, upload_id, []), True
-
-  return config, False
-
-def _is_multipart_in_progress(s3_client: S3Client, bucket: str, upload_id: str):
-  response = s3_client.list_multipart_uploads(Bucket=bucket)
-  if 'Uploads' not in response:
-    return False
-
-  upload_ids = {upload['UploadId'] for upload in response['Uploads']}
-  return upload_id in upload_ids
-
-def _initiate_multipart_upload(s3_client: S3Client, bucket: str, key: str) -> str:
-  response = s3_client.create_multipart_upload(Bucket=bucket, Key=key)
-  return response['UploadId']
-
-def _complete_multipart_upload(s3_client: S3Client, config: MultipartUploadConfig):
-  config_dict = config.to_dict()
-  parts_dict = {'Parts': config_dict['Parts']}
-
-  s3_client.complete_multipart_upload(
-    Bucket=config.Bucket,
-    Key=config.Key,
-    UploadId=config.UploadId,
-    MultipartUpload=parts_dict,
-  )
+    complete_multipart_upload(s3_client, config)
 
 def _get_upload_files(folder_path: str, prefix: str):
   file_paths = sorted([
