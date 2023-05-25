@@ -9,6 +9,7 @@ from s3_multipart_upload.subcommands.config import (
   save_multipart_file,
 )
 from s3_multipart_upload.subcommands.upload.upload_file import UploadFile
+from s3_multipart_upload.subcommands.upload.upload_single_thread import upload_part
 
 
 LOGGER = get_logger(__name__)
@@ -61,7 +62,7 @@ def upload_multipart(
     file_path, part_number, md5 = upload_file.FilePath, upload_file.PartNumber, upload_file.MD5
 
     LOGGER.info(f'Uploading {part_number}/{upload_files_count} - {file_path} - {md5}')
-    e_tag = _upload_part(s3_client, file_path, part_number, md5, config.Bucket, config.Key, config.UploadId)
+    e_tag = upload_part(s3_client, file_path, part_number, md5, config.Bucket, config.Key, config.UploadId)
 
     config.Parts.append(UploadedPart(e_tag, part_number))
     save_multipart_file(config_path, config)
@@ -81,20 +82,6 @@ def _get_config(s3_client: S3Client, bucket: str, key: str, config_path: str) ->
     return MultipartUploadConfig(bucket, key, upload_id, []), True
 
   return config, False
-
-def _upload_part(s3_client: S3Client, file_path: str, part_number: int, md5: str, bucket: str, key: str, upload_id: str) -> str:
-  """ Upload the file and returns the ETag string from the AWS response. """
-  with open(file_path, 'rb') as part_file:
-    upload_response = s3_client.upload_part(
-      Bucket=bucket, 
-      Key=key,
-      PartNumber=part_number,
-      Body=part_file,
-      UploadId=upload_id,
-      ContentMD5=md5,
-    )
-
-  return upload_response['ETag'].replace('"', '')
 
 def _is_multipart_in_progress(s3_client: S3Client, bucket: str, upload_id: str):
   response = s3_client.list_multipart_uploads(Bucket=bucket)
