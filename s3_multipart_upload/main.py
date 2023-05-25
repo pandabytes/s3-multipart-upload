@@ -4,7 +4,7 @@ import sys
 import boto3
 
 from s3_multipart_upload.subcommands.abort import abort_multipart_upload
-from s3_multipart_upload.subcommands.upload import upload_multipart
+from s3_multipart_upload.subcommands.upload.upload_multipart import upload_multipart
 
 s3_client = boto3.client('s3')
 
