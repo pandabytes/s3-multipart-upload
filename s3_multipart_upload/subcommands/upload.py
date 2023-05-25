@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import os
+
 from dataclasses import dataclass
 
 from mypy_boto3_s3 import S3Client
@@ -44,11 +45,13 @@ def upload_multipart(
     logger.info(f'Continuing multipart upload from {config_path}.')
     
     # Multipart upload started but there are some verifications we need to check
-    if not _is_multipart_in_progress(s3_client, bucket, config.UploadId):
-      raise ValueError(f'Upload id in {config_path} is either invalid, completed, or aborted.')
-
     if bucket != config.Bucket or key != config.Key:
-      raise ValueError(f'bucket or key does not match with Bucket or Key in {config_path}.')
+      logger.error(f'bucket or key does not match with Bucket or Key in {config_path}.')
+      return
+
+    if not _is_multipart_in_progress(s3_client, config.Bucket, config.UploadId):
+      logger.error(f'Upload id in {config_path} is either invalid, completed, or aborted.')
+      return
 
   # Get the files that we want to upload and if user specifies
   # a starting part number, then we filter the files and only
@@ -68,14 +71,19 @@ def upload_multipart(
 
   # Upload file one by one and save its ETag (returned from AWS)
   for upload_file in filtered_upload_files:
-    e_tag = _upload_part(s3_client, upload_file, config.Bucket, config.Key, config.UploadId)
-    config.Parts.append(UploadedPart(e_tag, upload_file.Part_number))
+    file_path, part_number = upload_file.FilePath, upload_file.PartNumber
+    md5 = _get_md5(file_path)
+
+    logger.info(f'Uploading {part_number}/{upload_files_count} - {file_path} - {md5}')
+    e_tag = _upload_part(s3_client, file_path, part_number, md5, config.Bucket, config.Key, config.UploadId)
+
+    config.Parts.append(UploadedPart(e_tag, part_number))
     save_multipart_file(config_path, config)
 
   # Finally complete the multipart upload
   if len(filtered_upload_files) > 0:
     logger.info(f'Uploaded {len(filtered_upload_files)} part(s). Will now complete multipart upload.')
-    _complete_multipart_upload(s3_client, bucket, key, config, config.UploadId)
+    _complete_multipart_upload(s3_client, config.Bucket, config.Key, config, config.UploadId)
 
 def _get_config(s3_client: S3Client, bucket: str, key: str, config_path: str) -> tuple[MultipartUploadConfig, bool]:
   """ Get the multipart config and a boolean value to indicate
@@ -88,12 +96,9 @@ def _get_config(s3_client: S3Client, bucket: str, key: str, config_path: str) ->
 
   return config, False
 
-def _upload_part(s3_client: S3Client, upload_file: UploadFile, bucket: str, key: str, upload_id: str) -> str:
+def _upload_part(s3_client: S3Client, file_path: str, part_number: int, md5: str, bucket: str, key: str, upload_id: str) -> str:
   """ Upload the file and returns the ETag string from the AWS response. """
-  file_path, part_number = upload_file.FilePath, upload_file.PartNumber
-  md5 = _get_md5(file_path)
-
-  with open(upload_file.File_path, 'rb') as part_file:
+  with open(file_path, 'rb') as part_file:
     upload_response = s3_client.upload_part(
       Bucket=bucket, 
       Key=key,
