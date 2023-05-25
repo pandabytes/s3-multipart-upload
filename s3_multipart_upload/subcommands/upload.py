@@ -13,6 +13,7 @@ from s3_multipart_upload.subcommands.config import (
   save_multipart_file,
 )
 
+
 @dataclass(frozen=True)
 class UploadFile:
   FilePath: str
@@ -21,7 +22,6 @@ class UploadFile:
   def __post_init__(self):
     if self.PartNumber <= 0:
       raise ValueError('PartNumber must be at least 1.')
-
 
 logger = get_logger('upload_logger')
 
@@ -36,19 +36,19 @@ def upload_multipart(
 ):
   # Determine if we need to initiate a new multipart upload 
   # or to continue with an existing multipart upload
-  config = load_multipart_file(config_path)
-  upload_id = None
-  if config is None:
-    logger.info(f'Initiating multipart upload in {config_path}')
-    upload_id = _initiate_multipart_upload(s3_client, bucket, key)
-    config = MultipartUploadConfig(bucket, key, upload_id, [])
+  config, new_multipart_upload = _get_config(s3_client, bucket, key, config_path)
+  if new_multipart_upload:
+    logger.info(f'Initiating multipart upload in {config_path}.')
     save_multipart_file(config_path, config)
   else:
-    logger.info(f'Continuing multipart upload from {config_path}')
-    upload_id = config.UploadId
-    if not _is_multipart_in_progress(s3_client, bucket, upload_id):
-      logger.warning(f'Upload id in {config_path} is either invalid, completed, or aborted. No upload will be done.')
-      return
+    logger.info(f'Continuing multipart upload from {config_path}.')
+    
+    # Multipart upload started but there are some verifications we need to check
+    if not _is_multipart_in_progress(s3_client, bucket, config.UploadId):
+      raise ValueError(f'Upload id in {config_path} is either invalid, completed, or aborted.')
+
+    if bucket != config.Bucket or key != config.Key:
+      raise ValueError(f'bucket or key does not match with Bucket or Key in {config_path}.')
 
   # Get the files that we want to upload and if user specifies
   # a starting part number, then we filter the files and only
@@ -59,37 +59,51 @@ def upload_multipart(
 
   upload_files_count = len(upload_files)
   if upload_files_count == 0:
-    logger.warning(f'No files found. Please make sure your folder path and prefix are correct')
+    logger.warning(f'No files found. Please make sure your folder path and prefix are correct.')
     return
 
   skip_file_count = len(upload_files) - len(filtered_upload_files)
   if skip_file_count > 0:
-    logger.warning(f'Skipped {skip_file_count}/{upload_files_count} files')
+    logger.warning(f'Skipped {skip_file_count}/{upload_files_count} files.')
 
   # Upload file one by one and save its ETag (returned from AWS)
   for upload_file in filtered_upload_files:
-    file_path, part_number = upload_file.FilePath, upload_file.PartNumber
-    md5 = _get_md5(file_path)
-
-    logger.info(f'Uploading {part_number}/{upload_files_count} - {file_path} - {md5}')
-    with open(file_path, 'rb') as part_file:
-      upload_response = s3_client.upload_part(
-        Bucket=bucket, 
-        Key=key,
-        PartNumber=part_number,
-        Body=part_file,
-        UploadId=upload_id,
-        ContentMD5=md5,
-      )
-
-    e_tag = upload_response['ETag'].replace('"', '')
-    config.Parts.append(UploadedPart(e_tag, part_number))
+    e_tag = _upload_part(s3_client, upload_file, config.Bucket, config.Key, config.UploadId)
+    config.Parts.append(UploadedPart(e_tag, upload_file.Part_number))
     save_multipart_file(config_path, config)
 
   # Finally complete the multipart upload
   if len(filtered_upload_files) > 0:
-    logger.info(f'Uploaded {len(filtered_upload_files)} part(s). Will now complete multipart upload')
-    _complete_multipart_upload(s3_client, bucket, key, config, upload_id)
+    logger.info(f'Uploaded {len(filtered_upload_files)} part(s). Will now complete multipart upload.')
+    _complete_multipart_upload(s3_client, bucket, key, config, config.UploadId)
+
+def _get_config(s3_client: S3Client, bucket: str, key: str, config_path: str) -> tuple[MultipartUploadConfig, bool]:
+  """ Get the multipart config and a boolean value to indicate
+      whether we loaded an existing config or we created a new one.
+  """
+  config = load_multipart_file(config_path)
+  if config is None:
+    upload_id = _initiate_multipart_upload(s3_client, bucket, key)
+    return MultipartUploadConfig(bucket, key, upload_id, []), True
+
+  return config, False
+
+def _upload_part(s3_client: S3Client, upload_file: UploadFile, bucket: str, key: str, upload_id: str) -> str:
+  """ Upload the file and returns the ETag string from the AWS response. """
+  file_path, part_number = upload_file.FilePath, upload_file.PartNumber
+  md5 = _get_md5(file_path)
+
+  with open(upload_file.File_path, 'rb') as part_file:
+    upload_response = s3_client.upload_part(
+      Bucket=bucket, 
+      Key=key,
+      PartNumber=part_number,
+      Body=part_file,
+      UploadId=upload_id,
+      ContentMD5=md5,
+    )
+
+  return upload_response['ETag'].replace('"', '')
 
 def _get_md5(file_path: str) -> str:
   with open(file_path, 'rb') as f:
