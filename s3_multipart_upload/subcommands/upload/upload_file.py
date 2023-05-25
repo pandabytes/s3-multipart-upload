@@ -10,6 +10,9 @@ class UploadFile:
 
   @property
   def MD5(self) -> str:
+    """ Dynamically compute the MD5 hash of `FilePath`. This can be
+        expensive if called multiple times if the file is large.
+    """
     with open(self.FilePath, 'rb') as f:
       h = hashlib.md5()
       for chunk in f:
