@@ -19,6 +19,7 @@ from s3_multipart_upload.subcommands.io.uploaded_part import (
   UploadedPartFileReader,
   UploadedPartFileWriter,
 )
+from s3_multipart_upload.subcommands.upload.upload_multi_threading import upload_using_multi_threading
 
 
 LOGGER = get_logger(__name__)
@@ -31,7 +32,8 @@ def upload_multipart(
   prefix: str,
   meta_file_path: str,
   parts_file_path: str,
-  starting_part_number: int | None
+  starting_part_number: int | None,
+  thread_count: int | None
 ):
   # Determine if we need to initiate a new multipart upload 
   # or to continue with an existing multipart upload
@@ -56,37 +58,53 @@ def upload_multipart(
       LOGGER.error(f'Upload id in {meta_file_path} is either invalid, completed, or aborted.')
       return
 
-  # Get the files that we want to upload and if user specifies
-  # a starting part number, then we filter the files and only
-  # upload the files from the specified part number and onward
-  start_part_number = _get_start_part_number(parts_file_path, starting_part_number)
   upload_files = _get_upload_files(folder_path, prefix)
-  filtered_upload_files = _filter_file_paths(upload_files, start_part_number)
-
   upload_files_count = len(upload_files)
   if upload_files_count == 0:
     LOGGER.warning(f'No files found. Please make sure your folder path and prefix are correct.')
     return
 
-  skip_file_count = len(upload_files) - len(filtered_upload_files)
-  if skip_file_count > 0:
-    LOGGER.warning(f'Skipped {skip_file_count}/{upload_files_count} files.')
+  uploaded_count = 0
 
-  # Upload file one by one and save its ETag (returned from AWS)
-  with UploadedPartFileWriter(parts_file_path, 'a', True) as writer:
-    for upload_file in filtered_upload_files:
-      file_path, part_number, md5 = upload_file.FilePath, upload_file.PartNumber, upload_file.MD5
+  if thread_count is None:
+    # Get the files that we want to upload and if user specifies
+    # a starting part number, then we filter the files and only
+    # upload the files from the specified part number and onward
+    start_part_number = _get_start_part_number(parts_file_path, starting_part_number)
+    filtered_upload_files = _filter_file_paths(upload_files, start_part_number)
+    skip_file_count = len(upload_files) - len(filtered_upload_files)
+    if skip_file_count > 0:
+      LOGGER.warning(f'Skipped {skip_file_count}/{upload_files_count} files.')
 
-      LOGGER.info(f'Uploading {part_number}/{upload_files_count} - {file_path} - {md5}')
-      e_tag = _upload_part(s3_client, file_path, part_number, md5, multipart_meta)
-      uploaded_part = UploadedPart(e_tag, part_number)
-      writer.write(uploaded_part)
+    # Upload file one by one and save its ETag (returned from AWS)
+    with UploadedPartFileWriter(parts_file_path, 'a', True) as writer:
+      for upload_file in filtered_upload_files:
+        file_path, part_number, md5 = upload_file.FilePath, upload_file.PartNumber, upload_file.MD5
 
-  # Finally complete the multipart upload
-  if len(filtered_upload_files) > 0:
-    LOGGER.info(f'Uploaded {len(filtered_upload_files)} part(s). Will now complete multipart upload.')
-    parts = _get_parts(parts_file_path)
-    complete_multipart_upload(s3_client, multipart_meta, parts)
+        LOGGER.info(f'Uploading {part_number}/{upload_files_count} - {file_path} - {md5}')
+        e_tag = _upload_part(s3_client, file_path, part_number, md5, multipart_meta)
+        uploaded_part = UploadedPart(e_tag, part_number)
+        writer.write(uploaded_part)
+      uploaded_count = len(filtered_upload_files)
+  else:
+    uploaded_files_from_file = _get_parts_from_file(parts_file_path)
+    missing_part_numbers = _get_missing_part_numbers(uploaded_files_from_file, upload_files_count, sort=True)
+    missing_upload_files = _find_upload_files(upload_files, missing_part_numbers)
+    LOGGER.info(f'Will upload {len(missing_upload_files)} missing parts out of {upload_files_count} total.')
+
+    results = upload_using_multi_threading(s3_client, thread_count, missing_upload_files, multipart_meta, parts_file_path)
+    for result in results:
+      if isinstance(result, Exception):
+        LOGGER.error('Multipart upload ran into a problem when uploading with multi-threading.')
+        return
+
+    uploaded_count = len(missing_upload_files)
+
+  # Finally, complete the multipart upload
+  if uploaded_count > 0:
+    LOGGER.info(f'Uploaded {uploaded_count} part(s) in this run. Will now complete multipart upload.')
+    uploaded_files_from_file = _get_parts_from_file(parts_file_path)
+    complete_multipart_upload(s3_client, multipart_meta, uploaded_files_from_file)
 
 def _upload_part(s3_client: S3Client, file_path: str, part_number: int, md5: str, multipart_meta: MultipartUploadMeta) -> str:
   """ Upload the file and returns the ETag string from the AWS response. """
@@ -103,6 +121,7 @@ def _upload_part(s3_client: S3Client, file_path: str, part_number: int, md5: str
   return upload_response['ETag'].replace('"', '')
 
 def _get_upload_files(folder_path: str, prefix: str):
+  """ Return a list of sorted upload file objects. """
   file_paths = sorted([
     os.path.join(folder_path, file_name) for file_name in os.listdir(folder_path)
     if file_name.startswith(prefix)
@@ -112,7 +131,7 @@ def _get_upload_files(folder_path: str, prefix: str):
 
 def _get_start_part_number(parts_file_path: str, starting_part_number: int | None):
   if starting_part_number is None:
-    uploaded_parts = _get_parts(parts_file_path)
+    uploaded_parts = _get_parts_from_file(parts_file_path)
     if not uploaded_parts:
       return 1
     
@@ -124,6 +143,26 @@ def _get_start_part_number(parts_file_path: str, starting_part_number: int | Non
 def _filter_file_paths(upload_files: list[UploadFile], starting_part_number: int):
   return [upload_file for upload_file in upload_files if upload_file.PartNumber >= starting_part_number]
 
-def _get_parts(parts_file_path: str) -> list[UploadedPart]:
+def _get_parts_from_file(parts_file_path: str) -> list[UploadedPart]:
   with UploadedPartFileReader(parts_file_path) as reader:
     return [uploaded_part for uploaded_part in reader.read()]
+
+def _get_missing_part_numbers(upload_files: list[UploadedPart], expect_total: int, sort: bool = True):
+  if len(upload_files) > expect_total:
+    raise ValueError('Size of upload_files must be less than or equal to expect_total.')
+
+  sorted_parts = upload_files
+  if sort:
+    sorted_parts = sorted(upload_files, key=lambda p: p.PartNumber)
+
+  part_numbers = [part.PartNumber for part in sorted_parts]
+  expect_part_numbers = [number for number in range(1, expect_total + 1)]
+
+  missing_numbers = set(expect_part_numbers).difference(part_numbers)
+  return missing_numbers
+
+def _find_upload_files(upload_files: list[UploadedPart], part_numbers: set[int]):
+  if not upload_files or not part_numbers:
+    return []
+  
+  return [upload_file for upload_file in upload_files if upload_file.PartNumber in part_numbers]

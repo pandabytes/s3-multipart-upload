@@ -27,6 +27,7 @@ def build_args_parser(args: list[str]):
   upload_cmd_parser.add_argument('-m', '--meta-file-path', type=str, required=True, help='Path to the multipart meta file')
   upload_cmd_parser.add_argument('-a', '--parts-file-path', type=str, required=True, help='Path to the file containging the uploaded parts')
   upload_cmd_parser.add_argument('-n', '--start-part-number', type=check_positive_int, required=False, help='Optionally specify which part number to start')
+  upload_cmd_parser.add_argument('-t', '--thread-count', type=check_positive_int, required=False, help='Optionally specify number of threads to use')
 
   # Abort sub-command
   abort_cmd_parser = subparsers.add_parser('abort', help='Abort multipart upload defined in the multipart meta file')
@@ -46,7 +47,8 @@ if __name__ == '__main__':
     meta_file_path: str = args.meta_file_path
     parts_file_path: str = args.parts_file_path
     starting_part_number: int | None = args.start_part_number
-    upload_multipart(S3_CLIENT, bucket, key, folder_path, prefix, meta_file_path, parts_file_path, starting_part_number)
+    thread_count: int | None = args.thread_count
+    upload_multipart(S3_CLIENT, bucket, key, folder_path, prefix, meta_file_path, parts_file_path, starting_part_number, thread_count)
   elif subcommand_name == 'abort':
     meta_file_path: str = args.meta_file_path
     abort_multipart_upload(S3_CLIENT, meta_file_path)

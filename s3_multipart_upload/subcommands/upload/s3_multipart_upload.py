@@ -4,8 +4,14 @@ from s3_multipart_upload.subcommands.io.uploaded_part import UploadedPart
 
 
 def complete_multipart_upload(s3_client: S3Client, meta: MultipartUploadMeta, parts: list[UploadedPart]):
-  parts_dict = {'Parts': [part.to_dict() for part in parts]}
+  if not parts:
+    raise ValueError('parts cannot be empty.')
 
+  sorted_parts = sorted(parts, key=lambda p: p.PartNumber)
+  if _have_missing_parts(sorted_parts):
+    raise ValueError('parts list has missing parts.')
+  
+  parts_dict = {'Parts': [part.to_dict() for part in parts]}
   s3_client.complete_multipart_upload(
     Bucket=meta.Bucket,
     Key=meta.Key,
@@ -25,3 +31,8 @@ def initiate_multipart_upload(s3_client: S3Client, bucket: str, key: str) -> str
   """ Return an upload id. """
   response = s3_client.create_multipart_upload(Bucket=bucket, Key=key)
   return response['UploadId']
+
+def _have_missing_parts(parts: list[UploadedPart]):
+  """ Assume `parts` is already sorted. """
+  first_part, last_part = parts[0], parts[-1]
+  return len(parts) != (last_part.PartNumber - first_part.PartNumber + 1)
