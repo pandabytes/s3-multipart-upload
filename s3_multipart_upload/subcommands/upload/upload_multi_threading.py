@@ -5,10 +5,11 @@ from multiprocessing.dummy import Pool as ThreadPool
 from mypy_boto3_s3 import S3Client
 
 from s3_multipart_upload.logger import get_logger
-from s3_multipart_upload.subcommands.io.multipart_meta import \
-    MultipartUploadMeta
-from s3_multipart_upload.subcommands.io.uploaded_part import (
-    UploadedPart, UploadedPartFileWriter)
+from s3_multipart_upload.io.multipart_meta import MultipartUploadMeta
+from s3_multipart_upload.io.uploaded_part import (
+  UploadedPart,
+  UploadedPartFileWriter,
+)
 from s3_multipart_upload.subcommands.upload.upload_file import UploadFile
 
 LOGGER = get_logger(__name__)

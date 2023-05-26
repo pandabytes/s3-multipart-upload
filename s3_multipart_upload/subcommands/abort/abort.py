@@ -1,7 +1,7 @@
 from mypy_boto3_s3 import S3Client
 
 from s3_multipart_upload.logger import get_logger
-from s3_multipart_upload.subcommands.io.multipart_meta import load_multipart_meta_file
+from s3_multipart_upload.io.multipart_meta import load_multipart_meta_file
 
 logger = get_logger('abort_logger')
 
