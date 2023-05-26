@@ -42,9 +42,6 @@ def upload_multipart(
     LOGGER.info(f'Initiating multipart upload in {meta_file_path}.')
     upload_id = initiate_multipart_upload(s3_client, bucket, key)
     multipart_meta = MultipartUploadMeta(bucket, key, upload_id)
-
-    # Save these data to disk
-    # save_uploaded_parts_file(parts_file_path, [])
     save_multipart_meta_file(meta_file_path, multipart_meta)
   else:
     LOGGER.info(f'Continuing multipart upload from {meta_file_path}.')
@@ -93,10 +90,11 @@ def upload_multipart(
     LOGGER.info(f'Will upload {len(missing_upload_files)} missing parts out of {upload_files_count} total.')
 
     results = upload_using_multi_threading(s3_client, thread_count, missing_upload_files, multipart_meta, parts_file_path)
-    for result in results:
-      if isinstance(result, Exception):
-        LOGGER.error('Multipart upload ran into a problem when uploading with multi-threading.')
-        return
+    failed_uploads = [result for result in results if result.exception is not None]
+    if failed_uploads:
+      failed_part_numbers = [u.upload_file.PartNumber for u in failed_uploads]
+      LOGGER.error(f'Upload ran into a problem when uploading with multi-threading. Failed part numbers: {failed_part_numbers}.')
+      return
 
     uploaded_count = len(missing_upload_files)
 

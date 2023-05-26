@@ -1,4 +1,5 @@
 import threading
+from dataclasses import dataclass
 from multiprocessing.dummy import Lock
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -12,6 +13,11 @@ from s3_multipart_upload.io.uploaded_part import (
 )
 from s3_multipart_upload.subcommands.upload.upload_file import UploadFile
 
+@dataclass(frozen=True)
+class UploadResult:
+  upload_file: UploadFile
+  exception: Exception | None = None
+
 LOGGER = get_logger(__name__)
 PARTS_FILE_LOCK = Lock()
 
@@ -21,11 +27,10 @@ def upload_using_multi_threading(
     upload_files: list[UploadFile],
     multipart_meta: MultipartUploadMeta,
     parts_file_path: str
-) -> list[Exception | None]:
+) -> list[UploadResult]:
   """ """
   if len(upload_files) == 0:
-    LOGGER.info('No files to be uploaded.')
-    return
+    return []
 
   LOGGER.info(f'Uploading with {thread_count} threads.')
 
@@ -34,7 +39,7 @@ def upload_using_multi_threading(
       args = [
         (s3_client, upload_file, multipart_meta, writer)
         for upload_file in upload_files  
-      ]      
+      ]  
       return thread_pool.starmap(_upload_part_thread, args)
 
 def _save_multipart_file_thread_safe(writer: UploadedPartFileWriter, uploaded_part: UploadedPart):
@@ -67,6 +72,7 @@ def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_
       _save_multipart_file_thread_safe(writer, UploadedPart(e_tag, part_number))
       
       LOGGER.info(f'({thread_id}) Done uploading {part_number} - {file_path} - {md5}')
+      return UploadResult(upload_file)
   except Exception as ex:
-    LOGGER.error(f'({thread_id}) An error occurred during uploading. {ex}.')
-    return ex
+    LOGGER.error(f'({thread_id}) An error occurred during uploading {upload_file}. {ex}.')
+    return UploadResult(upload_file, ex)
