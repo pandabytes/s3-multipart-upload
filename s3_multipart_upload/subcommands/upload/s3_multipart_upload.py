@@ -1,6 +1,6 @@
 from mypy_boto3_s3 import S3Client
-from s3_multipart_upload.subcommands.upload.io.multipart_meta import MultipartUploadMeta
-from s3_multipart_upload.subcommands.upload.io.uploaded_part import UploadedPart
+from s3_multipart_upload.subcommands.io.multipart_meta import MultipartUploadMeta
+from s3_multipart_upload.subcommands.io.uploaded_part import UploadedPart
 
 
 def complete_multipart_upload(s3_client: S3Client, meta: MultipartUploadMeta, parts: list[UploadedPart]):

@@ -9,12 +9,12 @@ from s3_multipart_upload.subcommands.upload.s3_multipart_upload import (
   initiate_multipart_upload,
   is_multipart_in_progress,
 )
-from s3_multipart_upload.subcommands.upload.io.multipart_meta import (
+from s3_multipart_upload.subcommands.io.multipart_meta import (
   MultipartUploadMeta,
   load_multipart_meta_file,
   save_multipart_meta_file, 
 )
-from s3_multipart_upload.subcommands.upload.io.uploaded_part import (
+from s3_multipart_upload.subcommands.io.uploaded_part import (
   UploadedPart,
   UploadedPartFileReader,
   UploadedPartFileWriter,
