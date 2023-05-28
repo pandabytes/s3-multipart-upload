@@ -42,7 +42,7 @@ def upload_using_multi_threading(
       ]  
       return thread_pool.starmap(_upload_part_thread, args)
 
-def _save_multipart_file_thread_safe(writer: UploadedPartFileWriter, uploaded_part: UploadedPart):
+def _save_uploaded_part_thread_safe(writer: UploadedPartFileWriter, uploaded_part: UploadedPart):
   """ Save the uploaded part in a thread-safe manner using `lock`. """
   try:
     PARTS_FILE_LOCK.acquire()
@@ -55,9 +55,9 @@ def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_
       the raised Exception. This is the unit of work for each thread.
   """
   thread_id = threading.get_ident()
-  file_path, part_number, md5 = upload_file.FilePath, upload_file.PartNumber, upload_file.MD5
 
   try:
+    file_path, part_number, md5 = upload_file.FilePath, upload_file.PartNumber, upload_file.MD5
     with open(file_path, 'rb') as part_file:
       upload_response = s3_client.upload_part(
         Bucket=multipart_meta.Bucket, 
@@ -69,7 +69,7 @@ def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_
       )
 
       e_tag = upload_response['ETag'].replace('"', '')
-      _save_multipart_file_thread_safe(writer, UploadedPart(e_tag, part_number))
+      _save_uploaded_part_thread_safe(writer, UploadedPart(e_tag, part_number))
       
       LOGGER.info(f'({thread_id}) Done uploading {part_number} - {file_path} - {md5}')
       return UploadResult(upload_file)

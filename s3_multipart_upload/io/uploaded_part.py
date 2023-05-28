@@ -48,7 +48,6 @@ class UploadedPartFileWriter(BaseUploadedPartFileReaderWriter):
 
   def open(self):
     self._writer = jsonlines.open(self._file_path, mode=self._mode, flush=self._flush)
-    return self
 
   def close(self):
     self._writer.close()

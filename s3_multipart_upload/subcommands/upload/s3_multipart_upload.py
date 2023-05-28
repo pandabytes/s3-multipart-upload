@@ -10,8 +10,8 @@ def complete_multipart_upload(s3_client: S3Client, meta: MultipartUploadMeta, pa
   sorted_parts = sorted(parts, key=lambda p: p.PartNumber)
   if _have_missing_parts(sorted_parts):
     raise ValueError('parts list has missing parts.')
-  
-  parts_dict = {'Parts': [part.to_dict() for part in parts]}
+
+  parts_dict = {'Parts': [part.to_dict() for part in sorted_parts]}
   s3_client.complete_multipart_upload(
     Bucket=meta.Bucket,
     Key=meta.Key,
