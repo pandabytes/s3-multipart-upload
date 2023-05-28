@@ -68,9 +68,9 @@ def upload_multipart(
   LOGGER.info(f'Will upload {len(missing_upload_files)} missing parts out of {upload_files_count} total.')
 
   results = upload_using_multi_threading(s3_client, thread_count, missing_upload_files, multipart_meta, parts_file_path)
-  failed_uploads = [result for result in results if result.exception is not None]
+  failed_uploads = [result for result in results if result.Failure is not None]
   if failed_uploads:
-    failed_part_numbers = [u.upload_file.PartNumber for u in failed_uploads]
+    failed_part_numbers = [u.File.PartNumber for u in failed_uploads]
     LOGGER.error(f'Upload ran into a problem when uploading with multi-threading. Failed part numbers: {failed_part_numbers}.')
     return
 
@@ -104,8 +104,8 @@ def _get_missing_part_numbers(uploaded_parts: list[UploadedPart], expect_total: 
   if sort:
     sorted_parts = sorted(uploaded_parts, key=lambda p: p.PartNumber)
 
-  part_numbers = [part.PartNumber for part in sorted_parts]
-  expect_part_numbers = [number for number in range(1, expect_total + 1)]
+  part_numbers = {part.PartNumber for part in sorted_parts}
+  expect_part_numbers = {number for number in range(1, expect_total + 1)}
 
   missing_numbers = set(expect_part_numbers).difference(part_numbers)
   return missing_numbers

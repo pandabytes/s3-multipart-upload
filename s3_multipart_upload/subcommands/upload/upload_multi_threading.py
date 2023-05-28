@@ -15,8 +15,8 @@ from s3_multipart_upload.subcommands.upload.upload_file import UploadFile
 
 @dataclass(frozen=True)
 class UploadResult:
-  upload_file: UploadFile
-  exception: Exception | None = None
+  File: UploadFile
+  Failure: Exception | None = None
 
 LOGGER = get_logger(__name__)
 PARTS_FILE_LOCK = Lock()
@@ -51,8 +51,7 @@ def _save_uploaded_part_thread_safe(writer: UploadedPartFileWriter, uploaded_par
     PARTS_FILE_LOCK.release()
 
 def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_meta: MultipartUploadMeta, writer: UploadedPartFileWriter) -> Exception | None:
-  """ Upload the file and upon successful returns None, upon failure returns 
-      the raised Exception. This is the unit of work for each thread.
+  """ Upload the file. This is the unit of work for each thread.
   """
   thread_id = threading.get_ident()
 
