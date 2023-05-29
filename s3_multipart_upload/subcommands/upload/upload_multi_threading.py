@@ -1,4 +1,5 @@
 import threading
+import time
 from dataclasses import dataclass
 from multiprocessing.dummy import Lock
 from multiprocessing.dummy import Pool as ThreadPool
@@ -50,7 +51,7 @@ def _save_uploaded_part_thread_safe(writer: UploadedPartFileWriter, uploaded_par
   finally:
     PARTS_FILE_LOCK.release()
 
-def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_meta: MultipartUploadMeta, writer: UploadedPartFileWriter) -> Exception | None:
+def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_meta: MultipartUploadMeta, writer: UploadedPartFileWriter) -> UploadResult:
   """ Upload the file. This is the unit of work for each thread.
   """
   thread_id = threading.get_ident()
@@ -58,6 +59,8 @@ def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_
   try:
     file_path, part_number, md5 = upload_file.FilePath, upload_file.PartNumber, upload_file.MD5
     with open(file_path, 'rb') as part_file:
+      start_time = time.time()
+
       upload_response = s3_client.upload_part(
         Bucket=multipart_meta.Bucket, 
         Key=multipart_meta.Key,
@@ -69,8 +72,11 @@ def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_
 
       e_tag = upload_response['ETag'].replace('"', '')
       _save_uploaded_part_thread_safe(writer, UploadedPart(e_tag, part_number))
-      
-      LOGGER.info(f'({thread_id}) Done uploading {part_number} - {file_path} - {md5}')
+
+      end_time = time.time()
+      elapsed_seconds = int(end_time - start_time)
+
+      LOGGER.info(f'({thread_id}) Done uploading {part_number} - {file_path} - {md5}. Completed in {elapsed_seconds} seconds.')
       return UploadResult(upload_file)
   except Exception as ex:
     LOGGER.error(f'({thread_id}) An error occurred during uploading {upload_file}. {ex}.')
