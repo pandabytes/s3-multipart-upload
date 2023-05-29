@@ -53,16 +53,25 @@ def upload_multipart(
       LOGGER.error(f'Upload id in {meta_file_path} is either invalid, completed, or aborted.')
       return
 
+  # Check if the the parts' UploadId in the parts file is
+  # the same as the one in the multipart meta file. So that
+  # we can correlate the the 2 files, by using UploadId
+  uploaded_parts_from_file = _get_uploaded_parts_from_file(parts_file_path)
+  if _have_unrelated_parts(multipart_meta, uploaded_parts_from_file):
+    LOGGER.error(f'{parts_file_path} has parts that have different UploadId from the UploadId in {meta_file_path}. '
+                 f'Please remove the file {parts_file_path} and re-run the upload.')
+    return
+
+  # If no files found, simply exit
   upload_files = _get_upload_files(folder_path, prefix)
   upload_files_count = len(upload_files)
   if upload_files_count == 0:
-    LOGGER.warning(f'No files found. Please make sure your folder path and prefix are correct.')
+    LOGGER.warning('No files found. Please make sure your folder path and prefix are correct.')
     return
 
-  # First determine the number parts we need to upload
+  # First determine the number parts we need to upload.
   # It can be all the parts (new upload) or a subset
   # of the all the parts (from an existing upload)
-  uploaded_parts_from_file = _get_uploaded_parts_from_file(parts_file_path)
   missing_part_numbers = _get_missing_part_numbers(uploaded_parts_from_file, upload_files_count, sort=True)
   missing_upload_files = _find_upload_files(upload_files, missing_part_numbers)
   LOGGER.info(f'Will upload {len(missing_upload_files)} missing parts out of {upload_files_count} total.')
@@ -115,3 +124,15 @@ def _find_upload_files(upload_files: list[UploadFile], part_numbers: set[int]) -
     return []
   
   return [upload_file for upload_file in upload_files if upload_file.PartNumber in part_numbers]
+
+def _have_unrelated_parts(multipart_meta: MultipartUploadMeta, uploaded_parts: list[UploadedPart]) -> bool:
+  """ Unrelated parts are parts that have different `UploadId` from the `UploadId`
+      in `multipart_meta`.
+  """
+  if not uploaded_parts:
+    return False
+  
+  for uploaded_part in uploaded_parts:
+    if uploaded_part.UploadId != multipart_meta.UploadId:
+      return True
+  return False

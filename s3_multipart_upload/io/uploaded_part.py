@@ -11,6 +11,7 @@ from s3_multipart_upload.base_frozen_dataclass import BaseFrozenDataClass
 class UploadedPart(BaseFrozenDataClass):
   ETag: str
   PartNumber: int
+  UploadId: str
 
   def __post_init__(self):
     if self.PartNumber <= 0:

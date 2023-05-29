@@ -71,7 +71,7 @@ def _upload_part_thread(s3_client: S3Client, upload_file: UploadFile, multipart_
       )
 
       e_tag = upload_response['ETag'].replace('"', '')
-      _save_uploaded_part_thread_safe(writer, UploadedPart(e_tag, part_number))
+      _save_uploaded_part_thread_safe(writer, UploadedPart(e_tag, part_number, multipart_meta.UploadId))
 
       end_time = time.time()
       elapsed_seconds = int(end_time - start_time)
