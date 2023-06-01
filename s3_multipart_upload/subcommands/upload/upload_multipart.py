@@ -31,7 +31,7 @@ def upload_multipart(
   prefix: str,
   meta_file_path: str,
   parts_file_path: str,
-  thread_count: int | None
+  thread_count: int
 ):
   # Determine if we need to initiate a new multipart upload 
   # or to continue with an existing multipart upload
