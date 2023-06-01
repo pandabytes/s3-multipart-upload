@@ -45,34 +45,41 @@ class UploadedPartFileWriter(BaseUploadedPartFileReaderWriter):
     self._file_path = file_path
     self._mode: Literal['w', 'a'] = mode
     self._flush = flush
-    self._writer = None
+    self._writer: jsonlines.Writer | None = None
 
   def open(self):
     self._writer = jsonlines.open(self._file_path, mode=self._mode, flush=self._flush)
 
   def close(self):
+    self._raise_exception_if_writer_not_opened()
     self._writer.close()
 
   def write(self, uploaded_part: UploadedPart):
+    self._raise_exception_if_writer_not_opened()
+    self._writer.write(uploaded_part.to_dict())
+
+  def _raise_exception_if_writer_not_opened(self):
     if self._writer is None:
       raise IOError('Writer is not opened yet.')
-
-    self._writer.write(uploaded_part.to_dict())
 
 class UploadedPartFileReader(BaseUploadedPartFileReaderWriter):
   def __init__(self, file_path: str) -> None:
     self._file_path = file_path
-    self._reader = None
+    self._reader: jsonlines.Reader | None = None
 
   def open(self):
     self._reader = jsonlines.open(self._file_path, mode='r')
 
   def close(self):
+    self._raise_exception_if_reader_not_opened()
     self._reader.close()
 
   def read(self):
-    if self._reader is None:
-      raise IOError('Reader is not opened yet.')
+    self._raise_exception_if_reader_not_opened()
 
     for json_obj in self._reader.iter(skip_empty=True, skip_invalid=False):
       yield UploadedPart(**json_obj)
+
+  def _raise_exception_if_reader_not_opened(self):
+    if self._reader is None:
+      raise IOError('Reader is not opened yet.')
