@@ -11,6 +11,7 @@ from s3_multipart_upload.base_frozen_dataclass import BaseFrozenDataClass
 class UploadedPart(BaseFrozenDataClass):
   ETag: str
   PartNumber: int
+  UploadId: str
 
   def __post_init__(self):
     if self.PartNumber <= 0:
@@ -48,7 +49,6 @@ class UploadedPartFileWriter(BaseUploadedPartFileReaderWriter):
 
   def open(self):
     self._writer = jsonlines.open(self._file_path, mode=self._mode, flush=self._flush)
-    return self
 
   def close(self):
     self._writer.close()

@@ -35,7 +35,7 @@ Prior to running the app, make sure to use `aws-vault` to log in to your AWS pro
 
 ```bash
 $ python s3_multipart_upload/main.py upload --help
-usage: main.py upload [-h] -b BUCKET -k KEY -d FOLDER_PATH -p PREFIX -c CONFIG_PATH [-n START_PART_NUMBER]
+usage: main.py upload [-h] -b BUCKET -k KEY -d FOLDER_PATH -p PREFIX -m META_FILE_PATH -a PARTS_FILE_PATH [-t THREAD_COUNT]
 
 options:
   -h, --help            show this help message and exit
@@ -46,68 +46,77 @@ options:
                         Folder path where the split files are stored
   -p PREFIX, --prefix PREFIX
                         Prefix of the split files
-  -c CONFIG_PATH, --config-path CONFIG_PATH
-                        Path to the config file
-  -n START_PART_NUMBER, --start-part-number START_PART_NUMBER
-                        Optionally specify which part number to start
+  -m META_FILE_PATH, --meta-file-path META_FILE_PATH
+                        Path to the multipart meta file
+  -a PARTS_FILE_PATH, --parts-file-path PARTS_FILE_PATH
+                        Path to the file containging the uploaded parts
+  -t THREAD_COUNT, --thread-count THREAD_COUNT
+                        Optionally specify number of threads to use
 ```
 
 Example run
 ```bash
-# First run gets interrupted when part number 3 is being uploaded
-$ python s3_multipart_upload/main.py upload \
-  -b "my-bucket" \
+# First run gets interrupted
+$ python s3_multipart_upload/main.py upload \                  
+  -b my-bucket \
   -k "data/input.txt" \
-  -d "/Users/foo/data/" \
-  -p "input_data_" \
-  -c "./upload_config.json"
-[2023-05-16 16:36:16,993 - upload_logger INFO] Initiating multipart upload in ./upload_config.json (upload.py:56)
-[2023-05-16 16:36:17,567 - upload_logger INFO] Uploading 1 - data/input_data_000 - WoJl8ZYhQfgZAbdKYDwEFA== (upload.py:83)
-[2023-05-16 16:36:38,089 - upload_logger INFO] Uploading 2 - data/input_data_001 - yrFuoEEu+fllFwckqiF81A== (upload.py:83)
-[2023-05-16 16:36:53,138 - upload_logger INFO] Uploading 3 - data/input_data_002 - VOHsvnwf6GNLKTPNp1NMmw== (upload.py:83)
+  -d /Users/foo/data/ \
+  -p input_data_ \
+  -m ./input_meta.json \
+  -a ./input_parts.jsonl \
+  -t 2
+[2023-05-31 19:23:52,269 - s3_multipart_upload.subcommands.upload.upload_multipart INFO] Initiating multipart upload in ./input_meta.json. (upload_multipart.py:40)
+[2023-05-31 19:23:52,985 - s3_multipart_upload.subcommands.upload.upload_multipart INFO] Will upload 876 missing parts out of 876 total. (upload_multipart.py:77)
+[2023-05-31 19:23:52,985 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] Uploading with 2 threads. (upload_multi_threading.py:36)
+[2023-05-31 19:24:00,235 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] (6107148288) Done uploading 1 - /Users/foo/data/input_data_0000 - XKDchU+OizVrAEkUTtYwVg==. Completed in 7 seconds. (upload_multi_threading.py:79)
+[2023-05-31 19:24:04,114 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] (6123974656) Done uploading 111 - /Users/foo/data/input_data_0110 - gWxq0YApP0zZN/xAvvSktQ==. Completed in 11 seconds. (upload_multi_threading.py:79)
+[2023-05-31 19:24:04,476 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] (6107148288) Done uploading 2 - /Users/foo/data/input_data_0001 - rEQhesDCshemKoKy/UVAng==. Completed in 4 seconds. (upload_multi_threading.py:79)
+[2023-05-31 19:24:07,858 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] (6123974656) Done uploading 112 - /Users/foo/data/input_data_0111 - guozFCoP2ruOj2vClmpJmw==. Completed in 3 seconds. (upload_multi_threading.py:79)
 ERROR: Credential AWS refreshed, please log back in.
 
-# After refreshing AWS credential, the app knows to pick up 
-# where it left off which is part number 3
-$ python s3_multipart_upload/main.py upload \
-  -b "my-bucket" \
+# After refreshing AWS credential, the app knows to pick up where it left off 
+$ python s3_multipart_upload/main.py upload \                  
+  -b my-bucket \
   -k "data/input.txt" \
-  -d "/Users/foo/data/" \
-  -p "input_data_" \
-  -c "./upload_config.json"
-[2023-05-16 16:37:30,762 - upload_logger INFO] Continuing multipart upload from ./upload_config.json (upload.py:61)
-[2023-05-16 16:37:31,448 - upload_logger WARNING] Skipped 2/4 files (upload.py:76)
-[2023-05-16 16:37:31,621 - upload_logger INFO] Uploading 3 - data/input_data_002 - VOHsvnwf6GNLKTPNp1NMmw== (upload.py:83)
-[2023-05-16 16:37:31,621 - upload_logger INFO] Uploading 4 - data/input_data_003 - VOHsvnwf6GNLKTPNp2NMmw== (upload.py:83)
-[2023-05-16 16:43:23,766 - upload_logger INFO] Uploaded 2 part(s). Will now complete multipart upload (upload.py:100)
+  -d /Users/foo/data/ \
+  -p input_data_ \
+  -m ./input_meta.json \
+  -a ./input_parts.jsonl \
+  -t 2
+[2023-05-31 19:27:27,625 - s3_multipart_upload.subcommands.upload.upload_multipart INFO] Continuing multipart upload from ./patient_meta.json. (upload_multipart.py:45)
+[2023-05-31 19:27:28,140 - s3_multipart_upload.subcommands.upload.upload_multipart INFO] Will upload 814 missing parts out of 876 total. (upload_multipart.py:77)
+[2023-05-31 19:27:28,141 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] Uploading with 2 threads. (upload_multi_threading.py:36)
+[2023-05-31 19:27:31,599 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] (6120730624) Done uploading 32 - /Users/foo/data/input_data_0031 - zpuziiqU2Bz/PY4++udy6w==. Completed in 3 seconds. (upload_multi_threading.py:79)
+[2023-05-31 19:27:34,657 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] (6120730624) Done uploading 33 - /Users/foo/data/input_data_0032 - Bxm9tBakZ4F3UVmg/KJjWw==. Completed in 3 seconds. (upload_multi_threading.py:79)
+[2023-05-31 19:27:35,431 - s3_multipart_upload.subcommands.upload.upload_multi_threading INFO] (6137556992) Done uploading 165 - /Users/foo/data/input_data_0164 - PtsUyxBWLbax/Wr4eFj9fw==. Completed in 7 seconds. (upload_multi_threading.py:79)
 ```
 
 # How it works?
 When you first start a brand new upload, the app will initiate a multipart upload
-and save the bucket, key, and upload id to the `CONFIG_PATH` file. Then the app
+and save the bucket, key, and upload id to the `META_FILE_PATH` file. Then the app
 uses `FOLDER_PATH` and `PREFIX` to find the files to be uploaded, and it uploads
-each file one by one. After each file is uploaded, the app saves the response
-data from AWS to `CONFIG_PATH`. If the upload is ever interrupted, the app can
-refer to the data it saves in `CONFIG_PATH` to know where the upload was
+each file one by one using 1 thread, or in parallel if `THREAD_COUNT` is greater
+than 1. After each file is uploaded, the app saves the response
+data from AWS to `PARTS_FILE_PATH`. If the upload is ever interrupted, the app can
+refer to the data it saves in `PARTS_FILE_PATH` to know where the upload was
 interrupted.
 
-The content of `CONFIG_PATH` looks something like this:
+The content of `META_FILE_PATH` looks something like this:
 ```json
 {
   "Bucket": "my-bucket",
   "Key": "data/input.txt",
-  "UploadId": "OQBrK98WoGKAzzd1NxXyimERi2gJR.hSo5Cn1_nETKIj6VCxI5y33HGX5rciJe_FAPxCxKuYjIQ_qDfptl1EoDb2v39rWIIrOb0QZpdLsG7i.cQr6j6w0OiujFraIay7.6peX7A_WWTv1kHniysEfA--",
-  "Parts": [
-    {
-      "ETag": "\"c449e066715cff5f5597b750bdfe1807\"",
-      "PartNumber": 1
-    },
-    {
-      "ETag": "\"c449e066715cff5f5597b750bdfe1808\"",
-      "PartNumber": 2
-    }
-  ]
+  "UploadId": "OQBrK98WoGKAzzd1NxXyimERi2gJR.hSo5Cn1_nETKIj6VCxI5y33HGX5rciJe_FAPxCxKuYjIQ_qDfptl1EoDb2v39rWIIrOb0QZpdLsG7i.cQr6j6w0OiujFraIay7.6peX7A_WWTv1kHniysEfA--"
 }
+```
+
+The content of `PARTS_FILE_PATH` is in [jsonl](https://jsonlines.org/) format, and it looks something like this:
+```json
+{"ETag": "5ca0dc854f8e8b356b0049144ed63056", "PartNumber": 1, "UploadId": "OQBrK98WoGKAzzd1NxXyimERi2gJR.hSo5Cn1_nETKIj6VCxI5y33HGX5rciJe_FAPxCxKuYjIQ_qDfptl1EoDb2v39rWIIrOb0QZpdLsG7i.cQr6j6w0OiujFraIay7.6peX7A_WWTv1kHniysEfA--"}
+{"ETag": "816c6ad180293f4cd937fc40bef4a4b5", "PartNumber": 111, "UploadId": "OQBrK98WoGKAzzd1NxXyimERi2gJR.hSo5Cn1_nETKIj6VCxI5y33HGX5rciJe_FAPxCxKuYjIQ_qDfptl1EoDb2v39rWIIrOb0QZpdLsG7i.cQr6j6w0OiujFraIay7.6peX7A_WWTv1kHniysEfA--"}
+{"ETag": "ac44217ac0c2b217a62a82b2fd45409e", "PartNumber": 2, "UploadId": "OQBrK98WoGKAzzd1NxXyimERi2gJR.hSo5Cn1_nETKIj6VCxI5y33HGX5rciJe_FAPxCxKuYjIQ_qDfptl1EoDb2v39rWIIrOb0QZpdLsG7i.cQr6j6w0OiujFraIay7.6peX7A_WWTv1kHniysEfA--"}
+{"ETag": "82ea33142a0fdabb8e8f6bc2966a499b", "PartNumber": 112, "UploadId": "OQBrK98WoGKAzzd1NxXyimERi2gJR.hSo5Cn1_nETKIj6VCxI5y33HGX5rciJe_FAPxCxKuYjIQ_qDfptl1EoDb2v39rWIIrOb0QZpdLsG7i.cQr6j6w0OiujFraIay7.6peX7A_WWTv1kHniysEfA--"}
+{"ETag": "0f5dacd6cb10a651031979609e3f668c", "PartNumber": 3, "UploadId": "OQBrK98WoGKAzzd1NxXyimERi2gJR.hSo5Cn1_nETKIj6VCxI5y33HGX5rciJe_FAPxCxKuYjIQ_qDfptl1EoDb2v39rWIIrOb0QZpdLsG7i.cQr6j6w0OiujFraIay7.6peX7A_WWTv1kHniysEfA--"}
 ```
 
 # References
