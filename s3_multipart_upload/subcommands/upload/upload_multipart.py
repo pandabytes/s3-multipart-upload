@@ -102,6 +102,10 @@ def _get_upload_files(folder_path: str, prefix: str):
   return [UploadFile(file_path, index + 1) for index, file_path in enumerate(file_paths)]
 
 def _get_uploaded_parts_from_file(parts_file_path: str) -> list[UploadedPart]:
+  """ If `parts_file_path` does not exist, then return an empty list. """
+  if not os.path.exists(parts_file_path):
+    return []
+
   with UploadedPartFileReader(parts_file_path) as reader:
     return [uploaded_part for uploaded_part in reader.read()]
 
