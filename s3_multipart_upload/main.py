@@ -38,6 +38,7 @@ if __name__ == '__main__':
   args = build_args_parser(sys.argv[1:])
   subcommand_name: str = args.subcommand
 
+  success = False
   if subcommand_name == 'upload':
     bucket: str = args.bucket
     key: str = args.key
@@ -46,7 +47,11 @@ if __name__ == '__main__':
     meta_file_path: str = args.meta_file_path
     parts_file_path: str = args.parts_file_path
     thread_count: int = args.thread_count
-    upload_multipart(S3_CLIENT, bucket, key, folder_path, prefix, meta_file_path, parts_file_path, thread_count)
+    
+    success = upload_multipart(S3_CLIENT, bucket, key, folder_path, prefix, meta_file_path, parts_file_path, thread_count)
+
   elif subcommand_name == 'abort':
     meta_file_path: str = args.meta_file_path
-    abort_multipart_upload(S3_CLIENT, meta_file_path)
+    success = abort_multipart_upload(S3_CLIENT, meta_file_path)
+
+  exit(0 if success else 1)

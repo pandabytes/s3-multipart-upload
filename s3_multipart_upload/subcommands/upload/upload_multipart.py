@@ -32,7 +32,7 @@ def upload_multipart(
   meta_file_path: str,
   parts_file_path: str,
   thread_count: int
-):
+) -> bool:
   # Determine if we need to initiate a new multipart upload 
   # or to continue with an existing multipart upload
   multipart_meta = load_multipart_meta_file(meta_file_path)
@@ -47,11 +47,11 @@ def upload_multipart(
     # Multipart upload started but there are some verifications we need to check
     if bucket != multipart_meta.Bucket or key != multipart_meta.Key:
       LOGGER.error(f'bucket or key does not match with Bucket or Key in {meta_file_path}.')
-      return
+      return False
 
     if not is_multipart_in_progress(s3_client, multipart_meta.Bucket, multipart_meta.UploadId):
       LOGGER.error(f'Upload id in {meta_file_path} is either invalid, completed, or aborted.')
-      return
+      return False
 
   # Check if the the parts' UploadId in the parts file is
   # the same as the one in the multipart meta file. So that
@@ -60,14 +60,14 @@ def upload_multipart(
   if _have_unrelated_parts(multipart_meta, uploaded_parts_from_file):
     LOGGER.error(f'{parts_file_path} has parts that have different UploadId from the UploadId in {meta_file_path}. '
                  f'Please remove the file {parts_file_path} and re-run the upload.')
-    return
+    return False
 
   # If no files found, simply exit
   upload_files = _get_upload_files(folder_path, prefix)
   upload_files_count = len(upload_files)
   if upload_files_count == 0:
     LOGGER.warning('No files found. Please make sure your folder path and prefix are correct.')
-    return
+    return False
 
   # First determine the number parts we need to upload.
   # It can be all the parts (new upload) or a subset
@@ -81,7 +81,7 @@ def upload_multipart(
   if failed_uploads:
     failed_part_numbers = [u.File.PartNumber for u in failed_uploads]
     LOGGER.error(f'Upload ran into a problem when uploading with multi-threading. Failed part numbers: {failed_part_numbers}.')
-    return
+    return False
 
   # At this point, the upload is done and we
   # need to refresh this list from the file
@@ -91,6 +91,8 @@ def upload_multipart(
   if uploaded_parts_from_file:
     LOGGER.info(f'Uploaded {len(missing_upload_files)} part(s) in this run. Will now complete multipart upload.')
     complete_multipart_upload(s3_client, multipart_meta, uploaded_parts_from_file)
+
+  return True
 
 def _get_upload_files(folder_path: str, prefix: str):
   """ Return a list of sorted upload file objects. """
