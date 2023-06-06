@@ -122,7 +122,7 @@ def _get_missing_part_numbers(uploaded_parts: list[UploadedPart], expect_total: 
   part_numbers = {part.PartNumber for part in sorted_parts}
   expect_part_numbers = {number for number in range(1, expect_total + 1)}
 
-  missing_numbers = set(expect_part_numbers).difference(part_numbers)
+  missing_numbers = expect_part_numbers.difference(part_numbers)
   return missing_numbers
 
 def _find_upload_files(upload_files: list[UploadFile], part_numbers: set[int]) -> list[UploadFile]:
