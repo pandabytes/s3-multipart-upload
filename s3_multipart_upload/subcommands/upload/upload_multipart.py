@@ -3,7 +3,6 @@ from mypy_boto3_s3 import S3Client
 
 from s3_multipart_upload.logger import get_logger
 
-from s3_multipart_upload.subcommands.upload.upload_file import UploadFile
 from s3_multipart_upload.subcommands.upload.s3_multipart_upload import (
   complete_multipart_upload,
   initiate_multipart_upload,
@@ -20,19 +19,30 @@ from s3_multipart_upload.io.uploaded_part import (
 )
 from s3_multipart_upload.subcommands.upload.upload_multi_threading import upload_using_multi_threading
 
-
 LOGGER = get_logger(__name__)
+
+# In byte (equivalent to 5 MB)
+PART_MIN_SIZE = 5e6
 
 def upload_multipart(
   s3_client: S3Client,
   bucket: str,
   key: str,
-  folder_path: str,
-  prefix: str,
+  file_path: str,
   meta_file_path: str,
   parts_file_path: str,
-  thread_count: int
+  thread_count: int,
+  split_size: int
 ) -> bool:
+  if not os.path.exists(file_path):
+    LOGGER.info(f'File {file_path} does not exist. Exiting...')
+    return False
+
+  file_size = os.path.getsize(file_path)
+  if not file_size:
+    LOGGER.info('File is empty. Exiting...')
+    return False
+
   # Determine if we need to initiate a new multipart upload 
   # or to continue with an existing multipart upload
   multipart_meta = load_multipart_meta_file(meta_file_path)
@@ -53,92 +63,47 @@ def upload_multipart(
       LOGGER.error(f'Upload id in {meta_file_path} is either invalid, completed, or aborted.')
       return False
 
-  # Check if the the parts' UploadId in the parts file is
-  # the same as the one in the multipart meta file. So that
-  # we can correlate the the 2 files, by using UploadId
-  uploaded_parts_from_file = _get_uploaded_parts_from_file(parts_file_path)
-  if _have_unrelated_parts(multipart_meta, uploaded_parts_from_file):
-    LOGGER.error(f'{parts_file_path} has parts that have different UploadId from the UploadId in {meta_file_path}. '
-                 f'Please remove the file {parts_file_path} and re-run the upload.')
-    return False
+  uploaded_parts = _get_uploaded_parts(parts_file_path)
+  if uploaded_parts:
+    LOGGER.info(f'{len(uploaded_parts)} parts have already been uploaded.')
 
-  # If no files found, simply exit
-  upload_files = _get_upload_files(folder_path, prefix)
-  upload_files_count = len(upload_files)
-  if upload_files_count == 0:
-    LOGGER.warning('No files found. Please make sure your folder path and prefix are correct.')
-    return False
+  part_numbers = {uploaded_part.PartNumber for uploaded_part in uploaded_parts}
 
-  # First determine the number parts we need to upload.
-  # It can be all the parts (new upload) or a subset
-  # of the all the parts (from an existing upload)
-  missing_part_numbers = _get_missing_part_numbers(uploaded_parts_from_file, upload_files_count, sort=True)
-  missing_upload_files = _find_upload_files(upload_files, missing_part_numbers)
-  LOGGER.info(f'Will upload {len(missing_upload_files)} missing parts out of {upload_files_count} total.')
+  LOGGER.debug(f'Uploading with {thread_count} threads.')
+  upload_results = upload_using_multi_threading(
+    s3_client=s3_client,
+    multipart_meta=multipart_meta,
+    uploaded_part_numbers=part_numbers,
+    thread_count=thread_count,
+    split_size=split_size,
+    file_path=file_path,
+    parts_file_path=parts_file_path,
+  )
 
-  results = upload_using_multi_threading(s3_client, thread_count, missing_upload_files, multipart_meta, parts_file_path)
-  failed_uploads = [result for result in results if result.Failure is not None]
+  failed_uploads = [upload_result
+                    for upload_result in upload_results
+                    if upload_result.failure is not None]
+
   if failed_uploads:
-    failed_part_numbers = [u.File.PartNumber for u in failed_uploads]
-    LOGGER.error(f'Upload ran into a problem when uploading with multi-threading. Failed part numbers: {failed_part_numbers}.')
+    failed_part_numbers = [u.part_number for u in failed_uploads]
+    LOGGER.error('Upload ran into a problem when uploading with '
+                 f'multi-threading. Failed part numbers: {failed_part_numbers}.')
     return False
 
-  # At this point, the upload is done and we
-  # need to refresh this list from the file
-  uploaded_parts_from_file = _get_uploaded_parts_from_file(parts_file_path)
+  # Construct the full list of all the uploaded
+  # parts: existing uploads come from the parts file and
+  # new uploads come from the upload above
+  for upload_result in upload_results:
+    uploaded_parts.append(upload_result.uploaded_part)
 
-  # Finally, complete the multipart upload  
-  if uploaded_parts_from_file:
-    LOGGER.info(f'Uploaded {len(missing_upload_files)} part(s) in this run. Will now complete multipart upload.')
-    complete_multipart_upload(s3_client, multipart_meta, uploaded_parts_from_file)
-
+  LOGGER.info('Will now complete multipart upload.')
+  complete_multipart_upload(s3_client, multipart_meta, uploaded_parts)
   return True
 
-def _get_upload_files(folder_path: str, prefix: str):
-  """ Return a list of sorted upload file objects. """
-  file_paths = sorted([
-    os.path.join(folder_path, file_name) for file_name in os.listdir(folder_path)
-    if file_name.startswith(prefix)
-  ])
-
-  return [UploadFile(file_path, index + 1) for index, file_path in enumerate(file_paths)]
-
-def _get_uploaded_parts_from_file(parts_file_path: str) -> list[UploadedPart]:
+def _get_uploaded_parts(parts_file_path: str) -> list[UploadedPart]:
   """ If `parts_file_path` does not exist, then return an empty list. """
   if not os.path.exists(parts_file_path):
     return []
 
   with UploadedPartFileReader(parts_file_path) as reader:
     return [uploaded_part for uploaded_part in reader.read()]
-
-def _get_missing_part_numbers(uploaded_parts: list[UploadedPart], expect_total: int, sort: bool = True):
-  if len(uploaded_parts) > expect_total:
-    raise ValueError('Size of uploaded_parts must be less than or equal to expect_total.')
-
-  sorted_parts = uploaded_parts
-  if sort:
-    sorted_parts = sorted(uploaded_parts, key=lambda p: p.PartNumber)
-
-  part_numbers = {part.PartNumber for part in sorted_parts}
-  expect_part_numbers = {number for number in range(1, expect_total + 1)}
-
-  missing_numbers = expect_part_numbers.difference(part_numbers)
-  return missing_numbers
-
-def _find_upload_files(upload_files: list[UploadFile], part_numbers: set[int]) -> list[UploadFile]:
-  if not upload_files or not part_numbers:
-    return []
-  
-  return [upload_file for upload_file in upload_files if upload_file.PartNumber in part_numbers]
-
-def _have_unrelated_parts(multipart_meta: MultipartUploadMeta, uploaded_parts: list[UploadedPart]) -> bool:
-  """ Unrelated parts are parts that have different `UploadId` from the `UploadId`
-      in `multipart_meta`.
-  """
-  if not uploaded_parts:
-    return False
-  
-  for uploaded_part in uploaded_parts:
-    if uploaded_part.UploadId != multipart_meta.UploadId:
-      return True
-  return False
