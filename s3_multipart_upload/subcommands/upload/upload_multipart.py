@@ -49,17 +49,21 @@ def upload_multipart(
   if multipart_meta is None:
     LOGGER.info(f'Initiating multipart upload in {meta_file_path}.')
     upload_id = initiate_multipart_upload(s3_client, bucket, key)
-    multipart_meta = MultipartUploadMeta(bucket, key, upload_id)
+    multipart_meta = MultipartUploadMeta(bucket, key, upload_id, split_size)
     save_multipart_meta_file(meta_file_path, multipart_meta)
   else:
     LOGGER.info(f'Continuing multipart upload from {meta_file_path}.')
     
     # Multipart upload started but there are some verifications we need to check
-    if bucket != multipart_meta.Bucket or key != multipart_meta.Key:
+    if bucket != multipart_meta.bucket or key != multipart_meta.key:
       LOGGER.error(f'bucket or key does not match with Bucket or Key in {meta_file_path}.')
       return False
+    
+    if split_size != multipart_meta.split_size:
+      LOGGER.error(f'split-size does not match with splitSize in {meta_file_path}.')
+      return False
 
-    if not is_multipart_in_progress(s3_client, multipart_meta.Bucket, multipart_meta.UploadId):
+    if not is_multipart_in_progress(s3_client, multipart_meta.bucket, multipart_meta.upload_id):
       LOGGER.error(f'Upload id in {meta_file_path} is either invalid, completed, or aborted.')
       return False
 
@@ -67,9 +71,7 @@ def upload_multipart(
   if uploaded_parts:
     LOGGER.info(f'{len(uploaded_parts)} parts have already been uploaded.')
 
-  part_numbers = {uploaded_part.PartNumber for uploaded_part in uploaded_parts}
-
-  LOGGER.debug(f'Uploading with {thread_count} threads.')
+  part_numbers = {uploaded_part.part_number for uploaded_part in uploaded_parts}
   upload_results = upload_using_multi_threading(
     s3_client=s3_client,
     multipart_meta=multipart_meta,

@@ -11,6 +11,11 @@ def abort_multipart_upload(s3_client: S3Client, meta_file_path: str):
     LOGGER.error(f'Meta file {meta_file_path} not found or empty.')
     return False
   
-  s3_client.abort_multipart_upload(Bucket=multipart_meta.Bucket, Key=multipart_meta.Key, UploadId=multipart_meta.UploadId)
+  s3_client.abort_multipart_upload(
+    Bucket=multipart_meta.bucket,
+    Key=multipart_meta.key,
+    UploadId=multipart_meta.upload_id
+  )
+
   LOGGER.info(f'Aborted multipart upload in {meta_file_path}.')
   return True

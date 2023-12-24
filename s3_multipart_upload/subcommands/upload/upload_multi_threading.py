@@ -36,6 +36,7 @@ def upload_using_multi_threading(
 ) -> list[UploadResult]:
   with ThreadPool(processes=thread_count) as pool:
     file_size = os.path.getsize(file_path)
+
     with (
       open(file_path, 'rb') as file_handle,
       UploadedPartFileWriter(parts_file_path, 'a', True) as writer,
@@ -111,24 +112,25 @@ def _upload_part(
       md5 = _compute_md5(content)
 
       upload_response = s3_client.upload_part(
-        Bucket=multipart_meta.Bucket, 
-        Key=multipart_meta.Key,
+        Bucket=multipart_meta.bucket, 
+        Key=multipart_meta.key,
         PartNumber=part_number,
         Body=content,
-        UploadId=multipart_meta.UploadId,
+        UploadId=multipart_meta.upload_id,
         ContentMD5=md5,
       )
       
       e_tag = upload_response['ETag'].replace('"', '')
-      uploaded_part = UploadedPart(e_tag, part_number, multipart_meta.UploadId)
+      uploaded_part = UploadedPart(e_tag, part_number, multipart_meta.upload_id)
       _save_uploaded_part_thread_safe(writer, uploaded_part)
 
       elapsed_seconds = int(time.time() - start_time)
       LOGGER.info(f'({thread_id}) Done uploading {part_number} - {md5}. Completed in {elapsed_seconds} seconds.')
       return UploadResult(start, end, part_number, uploaded_part)
   except Exception as e:
-    LOGGER.error(f'({thread_id}) An error occurred during uploading. {e}.')
-    return UploadResult(start, end, part_number, failure=e)
+    upload_result = UploadResult(start, end, part_number, failure=e)
+    LOGGER.error(f'({thread_id}) An error occurred during uploading. {upload_result}.')
+    return upload_result
 
 def _compute_md5(value: bytes):
   md5_hash = hashlib.md5(value)
