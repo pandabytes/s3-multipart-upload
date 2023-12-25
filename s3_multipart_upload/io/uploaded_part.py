@@ -1,20 +1,23 @@
-from dataclasses import dataclass
 import types
+from dataclasses import dataclass
 from typing import Literal
 
 import jsonlines
 
-from s3_multipart_upload.base_frozen_dataclass import BaseFrozenDataClass
-
+from dataclass_wizard import JSONWizard
 
 @dataclass(frozen=True)
-class UploadedPart(BaseFrozenDataClass):
-  ETag: str
-  PartNumber: int
-  UploadId: str
+class UploadedPart(JSONWizard):
+  e_tag: str
+  part_number: int
+  upload_id: str
+
+  class Meta(JSONWizard.Meta):
+    key_transform_with_dump='CAMEL'
+    key_transform_with_load='SNAKE'
 
   def __post_init__(self):
-    if self.PartNumber <= 0:
+    if self.part_number <= 0:
       raise ValueError('PartNumber must be at least 1.')
 
 class BaseUploadedPartFileReaderWriter:
@@ -78,7 +81,7 @@ class UploadedPartFileReader(BaseUploadedPartFileReaderWriter):
     self._raise_exception_if_reader_not_opened()
 
     for json_obj in self._reader.iter(skip_empty=True, skip_invalid=False):
-      yield UploadedPart(**json_obj)
+      yield UploadedPart.from_dict(json_obj)
 
   def _raise_exception_if_reader_not_opened(self):
     if self._reader is None:

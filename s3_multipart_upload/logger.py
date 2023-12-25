@@ -9,7 +9,7 @@ class CustomFormatter(logging.Formatter):
   RED = "\x1b[31;20m"
   BOLD_RED = "\x1b[31;1m"
   RESET = "\x1b[0m"
-  FORMAT = f"{{0}}[%(asctime)s - %(name)s %(levelname)s]{RESET} %(message)s (%(filename)s:%(lineno)d)"
+  FORMAT = f"{{0}}[%(asctime)s %(levelname)s]{RESET} %(message)s (%(filename)s:%(lineno)d)"
 
   LEVEL_COLORS = {
     logging.DEBUG: GREY,
