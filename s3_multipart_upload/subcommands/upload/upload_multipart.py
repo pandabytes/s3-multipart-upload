@@ -68,6 +68,15 @@ def upload_multipart(
   if uploaded_parts:
     LOGGER.info(f'{len(uploaded_parts)} parts have already been uploaded.')
 
+  # Check if the the parts' UploadId in the parts file is
+  # the same as the one in the multipart meta file. So that
+  # we can correlate the the 2 files, by using UploadId
+  if _have_unrelated_parts(multipart_meta, uploaded_parts):
+    LOGGER.error(f'{parts_file_path} has parts that have different uploadId from '
+                 f'the uploadId in {meta_file_path}. Please remove the file '
+                 f'{parts_file_path} and re-run the upload.')
+    return False
+
   part_numbers = {uploaded_part.part_number for uploaded_part in uploaded_parts}
   upload_results = upload_using_multi_threading(
     s3_client=s3_client,
@@ -108,3 +117,15 @@ def _get_uploaded_parts(parts_file_path: str) -> list[UploadedPart]:
 
   with UploadedPartFileReader(parts_file_path) as reader:
     return [uploaded_part for uploaded_part in reader.read()]
+
+def _have_unrelated_parts(multipart_meta: MultipartUploadMeta, uploaded_parts: list[UploadedPart]) -> bool:
+  """ Unrelated parts are parts that have different `uploadId` from the `uploadId`
+      in `multipart_meta`.
+  """
+  if not uploaded_parts:
+    return False
+
+  for uploaded_part in uploaded_parts:
+    if uploaded_part.upload_id != multipart_meta.upload_id:
+      return True
+  return False
