@@ -1,10 +1,9 @@
 import base64
 import hashlib
-import time
 import os
-from dataclasses import dataclass
-import boto3
+import time
 import threading
+from dataclasses import dataclass
 
 from multiprocessing.dummy import Lock
 from multiprocessing.dummy import Pool as ThreadPool

@@ -7,6 +7,8 @@ from s3_multipart_upload.subcommands.abort.abort import abort_multipart_upload
 from s3_multipart_upload.subcommands.upload.upload_multipart import upload_multipart
 
 S3_CLIENT = boto3.client('s3')
+
+# In byte (equivalent to 5 MB)
 PART_MIN_SIZE = int(5e6)
 
 def check_positive_int(number_str: str):

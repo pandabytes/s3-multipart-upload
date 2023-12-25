@@ -21,9 +21,6 @@ from s3_multipart_upload.subcommands.upload.upload_multi_threading import upload
 
 LOGGER = get_logger(__name__)
 
-# In byte (equivalent to 5 MB)
-PART_MIN_SIZE = 5e6
-
 def upload_multipart(
   s3_client: S3Client,
   bucket: str,
@@ -100,6 +97,8 @@ def upload_multipart(
 
   LOGGER.info('Will now complete multipart upload.')
   complete_multipart_upload(s3_client, multipart_meta, uploaded_parts)
+
+  LOGGER.info(f'Upload to "s3://{bucket}/{key}" completed successfully.')
   return True
 
 def _get_uploaded_parts(parts_file_path: str) -> list[UploadedPart]:
